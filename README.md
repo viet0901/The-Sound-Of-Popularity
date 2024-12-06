@@ -10,9 +10,6 @@ This project explores the relationship between various musical features and the 
 2. [Dataset Overview](#-dataset-overview)  
 3. [Methodology](#-methodology)  
 4. [Results and Insights](#-results-and-insights)  
-5. [Installation and Usage](#-installation-and-usage)  
-6. [Contributing](#-contributing)  
-7. [License](#-license)  
 
 ---
 
