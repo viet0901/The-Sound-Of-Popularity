@@ -1,0 +1,904 @@
+---
+title: "Final Project"
+author: "Viet Nguyen"
+date: "`r Sys.Date()`"
+output:   
+  html_document:
+    toc_float:
+      toc_collapsed: true
+    code_folding: hide
+    theme: united
+    toc: true
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE, include = FALSE}
+setwd("/Users/minhvietnguyen/Documents/Spring_24/MATH220/Final Project")
+library(dplyr)
+library(ggplot2)
+library(car)
+library(sandwich)
+library(lmtest)
+library(leaps)
+```
+
+```{r}
+song <- read.csv("spotify-2023.csv")
+```
+
+
+# Data Overview
+
+## Introduction 
+
+In today's world, music isn't just about catchy tunes; it's about how it affects us. We've all felt its power to change our mood, ease our worries, and even help us express ourselves. And now, researchers are digging deep to understand why some songs become hits while others fade into the background. This project is all about diving into the data behind music. We're breaking down song samples, looking at all the little details, and trying to figure out what makes a song popular based on the total number of streams on Spotify.
+
+## Ethical Consideration 
+
+As we delve into our research on song popularity prediction, it's essential to prioritize ethical principles. This includes obtaining consent, protecting data privacy, and ensuring transparency in our methods and findings. We must also be mindful of potential societal impacts, striving to promote diversity and avoid perpetuating biases. By upholding these standards, we can conduct our study responsibly and contribute positively to the field of music research.
+
+## Data Sources 
+
+Nidula Elgiriyewithana. “Most Streamed Spotify Songs 2023.” Kaggle, 26 Aug. 2023, www.kaggle.com/datasets/nelgiriyewithana/top-spotify-songs-2023. 
+
+
+## Data Exploration
+
+This dataset consists of 24 variables and 953 observation. We gonna look at these variables to build our model to predict the song popularity.
+
+- artist_count: Number of artists contributing to the song
+- released_year: Year when the song was released
+- released_month: Month when the song was released
+- released_day: Day of the month when the song was released
+- in_spotify_playlists: Number of Spotify playlists the song is included in
+- in_spotify_charts: Presence and rank of the song on Spotify charts
+- streams: Total number of streams on Spotify
+- in_apple_playlists: Number of Apple Music playlists the song is included in
+- in_apple_charts: Presence and rank of the song on Apple Music charts
+- bpm: Beats per minute, a measure of song tempo
+- danceability_%: Percentage indicating how suitable the song is for dancing
+- valence_%: Positivity of the song's musical content
+- energy_%: Perceived energy level of the song
+- acousticness_%: Amount of acoustic sound in the song
+- instrumentalness_%: Amount of instrumental content in the song
+- liveness_%: Presence of live performance elements
+- speechiness_%: Amount of spoken words in the song
+
+
+We can see the glimpse of data as below
+
+```{r}
+glimpse(song)
+```
+
+Here is the summary of the dataset 
+
+```{r}
+summary(song)
+```
+
+## Data Cleaning
+
+```{r}
+song$streams <- as.numeric(as.character(song$streams))
+song$in_shazam_charts <- as.numeric(as.character(song$in_shazam_charts))
+song <- na.omit(song)
+song <- song %>% 
+  select(-track_name, -artist.s._name, -in_deezer_playlists, -in_deezer_charts, -in_shazam_charts, -key, -mode)
+glimpse(song)
+```
+
+Here is the glimpse of data after cleanning.
+
+# Data Analysis
+
+## Spliting Set
+
+First, we would want to separate a training set and train set
+
+```{r}
+N <- seq(448)
+S <- sample(N,447)
+songtest_sample <- song[S,]
+songtrain_sample <- song[-S, ]
+```
+
+Export csv file
+
+```{r}
+#write.csv(songtest_sample, "songtest.csv")
+#write.csv(songtrain_sample, "songtrain.csv")
+
+songtest <- read.csv("songtest.csv")
+songtrain <- read.csv("songtrain.csv")
+
+songtest <- songtest %>% 
+  select(-X)
+
+songtrain2 <- songtrain %>% 
+  select(-X)
+```
+
+Since seperate the dataset would result in a different dataset every times. Therefore, I would export the train and the train set as csv file to do the report on that dataset only. To not run the code again which we would get a new dataset, I put hash in front of the export function. 
+
+## Examination of variables
+
+We gonna make histogram to see each variables that if they are approximately normal or not and plot each variables with song popularity to see if they will better fitted as a quadratic line.
+
+### streams
+
+```{r}
+hist(songtrain2$streams, col = 'skyblue', xlab = "Streams", main = "Histogram of Streams")
+```
+
+From the histogram, we can see that it is skewed to the right. This means that this variables is not approximatly normal distributed, so we would need to take the log of this variable.
+
+```{r}
+songtrain3 <- songtrain2 %>% 
+  mutate(Logstreams = log(streams)) %>% 
+  select(-streams)
+
+
+hist(songtrain3$Logstreams, col = "royalblue", xlab = "Log of Streams", main = "Histogram of Log Streams")
+```
+
+After logging this variable, the histogram is quite normal distributed which means that logging this variables fix this problem. Therefore, we would consider the log of this variable for the model.
+
+### artist_count
+
+```{r}
+hist(songtrain2$artist_count, col = "skyblue", xlab = "Artist Count", main = "Histogram of Artist Count")
+```
+
+From the histogram, we can see that it is skewed to the right. This means that this variables is not approximately normal distributed. This is because of most of the song in the world is mostly by only one artist. However, we would still consider this variable for the model.
+
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(artist_count, Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against artist_count, we can see that the quadratic line and the linear line have almost the same fit with the data points. Therefore, we would not consider if variable I(artist_count^2) suitable with the best model.
+
+### released_year
+
+```{r}
+hist(songtrain2$released_year, col = "skyblue", xlab = "Released Year", main = "Histogram of Released Year")
+```
+
+From the histogram, we can see that it is skewed to the left. This means that this variables is not approximatly normal distributed. This is because most of the song on the chart is from 2023 since this is a chart of Spotify in 2023. However, we would still consider this variable for the model.
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(released_year, Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against released_year, we can see that the quadratic line and the linear line have almost the same fit with the data points. However, it seem like the quadratic model would fit a little more points than linear line. Therefore, we would consider if variable I(released_year^2) suitable with the best model.  
+
+
+### released_month
+
+```{r}
+hist(songtrain2$released_month, col = "skyblue", xlab = "Released Month", main = "Histogram of Released Month")
+```
+
+From the histogram of released_month, we can see that this variable is approximately normal distributed. Therefore we would not need to take the log of this variable.
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(released_month, Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against released_month, we can see that the quadratic line and the linear line have almost the same fit with the data points. Therefore, we would not consider if variable I(released_month^2) suitable with the best model.
+
+
+### released_day
+
+```{r}
+hist(songtrain2$released_day, col = "skyblue", xlab = "The realeased day of the song", main = "Histogram of songs' released day")
+```
+
+From the histogram of released_day, we can see that this variable is approximately normal distributed. Therefore we would not need to take the log of this variable.
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(released_day, Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against released_day, we can see that the quadratic line and the linear line have almost the same fit with the data points. However, it seem like the quadratic model would fit a little more points than linear line. Therefore, we would consider if variable I(released_day^2) suitable with the best model.  
+
+
+### in_spotify_playlists
+
+```{r}
+hist(songtrain2$in_spotify_playlists, col = "skyblue", xlab = "Number of Spotify playlist of song is included in", main = "Histogram of Spotify playlist a song is included in")
+```
+
+From the histogram, we can see that it is skewed to the right. This means that this variables is not approximatly normal distributed, so we would need to take the log of this variable.
+
+```{r}
+songtrain3 <- songtrain3 %>% 
+  mutate(Login_spotify_playlists = log(in_spotify_playlists)) %>% 
+  select(-in_spotify_playlists)
+
+hist(songtrain3$Login_spotify_playlists, col ="royalblue", xlab ="Log Number of Playlist a song is include in", main = "Histogram of log number of playlist")
+```
+
+After logging this variable, the histogram is quite normal distributed which means that logging this variables songtrain this problem. Therefore, we would consider the log of this variable for the model.
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(Login_spotify_playlists, Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against Login_spotify_playlists, we can see that the quadratic line and the linear line have almost the same fit with the data points. However, it seem like the quadratic model would fit a little more points than linear line. Therefore, we would consider if variable I(Login_spotify_playlists^2) suitable with the best model.  
+
+
+### in_spotify_charts
+
+```{r}
+hist(songtrain2$in_spotify_charts, col = "skyblue", xlab = "Rank of the song on Spotify charts", main = "Histogram of Spotify Ranking")
+```
+
+From the histogram, we can see that it is skewed to the right. This is because most of the song in this dataset have not been on chart. However, we would still consider this as a variable for the prediction since in theory, the more times the songs are on chart, the higher number of streams it should have.
+
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(in_spotify_charts, Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange") 
+```
+
+From the plot of Logstreams against in_spotify_charts, we can see that the quadratic line and the linear line have almost the same fit with the data points. However, it seem like the quadratic model would fit a little more points than linear line. Therefore, we would consider if variable I(in_spotify_charts^2) suitable with the best model.  
+
+### in_apple_playlists
+
+```{r}
+hist(songtrain2$in_apple_playlists, col = "skyblue", xlab = "Number of Apple playlist a song is included in", main = "Histogram of Apple Playlist a song is included in")
+```
+
+From the histogram, we can see that it is skewed to the right. This means that this variables is not approximately normal distributed, so we would need to take the log of this variable.
+
+```{r}
+songtrain3 <- songtrain3 %>% 
+  mutate(Login_apple_playlists = log(in_apple_playlists + 1)) %>% 
+  select(-in_apple_playlists)
+
+hist(songtrain3$Login_apple_playlists, col ="royalblue", xlab = "Log of the number of Apple playlist a Song is included in", main = "Histogram of the number of Apple playlist ")
+```
+
+We add one to variable when log to avoid infinite value. After logging this variable, the histogram is quite normal distributed which means that logging this variables songtrain this problem. Therefore, we would consider the log of this variable for the model.
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(Login_apple_playlists, Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against Login_apple_playlists, we can see that the quadratic line and the linear line have almost the same fit with the data points. However, it seem like the quadratic model would fit a little more points than linear line. Therefore, we would consider if variable I(Login_apple_playlists^2) suitable with the best model.  
+
+### in_apple_charts
+
+```{r}
+hist(songtrain2$in_apple_charts, col = "skyblue", xlab = "Rank of song on Apple charts", main = "Histogram of song on Apple Charts")
+```
+
+From the histogram, we can see that it is skewed to the right. This means that this variables is not approximately normal distributed, so we would need to take the log of this variable.
+
+```{r}
+songtrain3 <- songtrain3 %>% 
+  mutate(Login_apple_charts = log(in_apple_charts + 1)) %>% 
+  select(-in_apple_charts)
+
+hist(songtrain3$Login_apple_charts, col ="royalblue", xlab = "Log of the rank of a song on Apple charts", main = "Histogram of LOf rank of a song on Apple chart")
+```
+
+We add one to variable when log to avoid infinite value. After logging this variable, the histogram is quite normal distributed which means that logging this variables songtrain this problem. Therefore, we would consider the log of this variable for the model.
+
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(Login_apple_charts, Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against Login_apple_charts, we can see that the quadratic line and the linear line have almost the same fit with the data points. However, we can see that the quadratic line and the linear line have almost the same fit with the data points. However, it seem like the quadratic model would fit a little more points than linear line. Therefore, we would consider if variable I(Login_apple_charts^2) suitable with the best model.
+
+### bpm
+
+```{r}
+hist(songtrain2$bpm, col = "skyblue", xlab = "Beats per Minute", main = "Histogram of BPM")
+```
+
+From the histogram of bpm, we can see that this variable is approximately normal distributed. Therefore we would not need to take the log of this variable.
+
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(bpm, Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against bpm, we can see that the quadratic line and the linear line have almost the same fit with the data points. Therefore, we would not consider if variable I(bpm^2) suitable with the best model.
+
+### danceability_.
+
+```{r}
+hist(songtrain2$danceability_., col = "skyblue", xlab = "Danceability", main = "Histogram of Dancebility")
+```
+
+From the histogram of danceability_ , we can see that this variable is approximately normal distributed. Therefore we would not need to take the log of this variable.
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(danceability_., Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against danceability_., we can see that the quadratic line and the linear line have almost the same fit with the data points. Therefore, we would not consider if variable I(danceability_.^2) suitable with the best model.
+
+
+### valence_.
+
+```{r}
+hist(songtrain2$valence_., col = "skyblue", xlab = "Positivity of the song's musical content", main = "Histogram of Valence")
+```
+
+From the histogram of valence_., we can see that this variable is approximately normal distributed. Therefore we would not need to take the log of this variable.
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(valence_., Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+
+From the plot of Logstreams against valence_., we can see that the quadratic line and the linear line have almost the same fit with the data points. Therefore, we would not consider if variable I(valence_.^2) suitable with the best model.
+
+### energy_.
+
+```{r}
+hist(songtrain2$energy_., col = "skyblue", xlab = "Energy of the song", main = "Histogram of energy")
+```
+
+From the histogram of energy_., we can see that this variable is approximately normal distributed. Therefore we would not need to take the log of this variable.
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(energy_., Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against energy_., we can see that the quadratic line and the linear line have almost the same fit with the data points. Therefore, we would not consider if variable I(energy_.^2) suitable with the best model.
+
+
+### acousticness_.
+
+```{r}
+hist(songtrain2$acousticness_., col = "skyblue", xlab = "Acousticness", main = "Histogram of Acousticness")
+```
+
+From the histogram, we can see that it is skewed to the right. This means that this variables is not approximately normal distributed, so we would need to take the log of this variable.
+
+
+```{r}
+songtrain3 <- songtrain3 %>% 
+  mutate(Logacousticness_. = log(acousticness_. + 1)) %>% 
+  select(-acousticness_.)
+
+hist(songtrain3$Logacousticness_., col ="royalblue", xlab = "Log of acousticness", main = "Histogram of log acousticness")
+```
+
+We add one to variable when log to avoid infinite value. After logging this variable, the histogram is quite normal distributed which means that logging this variables fix this problem. Therefore, we would consider the log of this variable for the model.
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(Logacousticness_., Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against Logacousticness_., we can see that the quadratic line and the linear line have almost the same fit with the data points. Therefore, we would not consider if variable I(Logacousticness_.^2) suitable with the best model.
+
+### instrumentalness_.
+
+```{r}
+hist(songtrain2$instrumentalness_., col = "skyblue", xlab = "Instrumentalness", main = "Histogram of instrumentalness")
+```
+
+From the histogram, we can see that it is skewed to the right. This means that this variables is not approximately normal distributed, so we would need to take the log of this variable.
+
+```{r}
+songtrain3 <- songtrain3 %>% 
+  mutate(Loginstrumentalness_. = log(instrumentalness_. + 1)) %>% 
+  select(-instrumentalness_.)
+
+hist(songtrain3$Loginstrumentalness_., col ="royalblue", xlab = "Log of instrumentalness", main = "Log of instrumentalness")
+```
+
+We add one to variable when log to avoid infinite value. After logging this variable, the histogram is not normal distributed which means that logging this variables do not fix this problem. Therefore, we would not consider this variable for the model.
+
+### liveness_.
+
+```{r}
+hist(songtrain2$liveness_., col = "skyblue", xlab = "Presence of live performance elements (%)", main = "Histogram of Live Elements")
+```
+
+From the histogram, we can see that it is skewed to the right. This means that this variables is not approximately normal distributed, so we would need to take the log of this variable.
+
+```{r}
+songtrain3 <- songtrain3 %>% 
+  mutate(Logliveness_. = log(liveness_.)) %>% 
+  select(-liveness_.)
+
+hist(songtrain3$Logliveness_., col ="royalblue", xlab = "Log of the presence of live performance elements (%)", main = "Histogram of Log Live Elements") 
+```
+
+After logging this variable, the histogram is quite normal distributed which means that logging this variables fix this problem. Therefore, we would consider the log of this variable for the model.
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(Logliveness_., Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against Logliveness_., we can see that the quadratic line and the linear line have almost the same fit with the data points. Therefore, we would not consider if variable I(Logliveness_.^2) suitable with the best model.
+
+
+### speechiness_.
+
+```{r}
+hist(songtrain2$speechiness_., col = "skyblue", xlab = "Speechiness", main = "Histogram of speechiness" )
+```
+
+After logging this variable, the histogram is quite normal distributed which means that logging this variables fix this problem. Therefore, we would consider the log of this variable for the model.
+
+
+```{r}
+songtrain3 <- songtrain3 %>% 
+  mutate(Logspeechiness_. = log(speechiness_.)) %>% 
+  select(-speechiness_.)
+
+hist(songtrain3$Logspeechiness_., col ="royalblue", xlab = "Log speechiness", main = "Histogram of log speechiness")
+```
+
+After logging this variable, the histogram is quite normal distributed which means that logging this variables fix this problem. Therefore, we would consider the log of this variable for the model.
+
+```{r}
+songtrain3 %>%
+  ggplot(aes(Logspeechiness_., Logstreams))+
+  geom_point(color = "royalblue1")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,1), color = "red")+
+  stat_smooth(method = "lm",formula = y ~ poly(x,2), color = "orange")
+```
+
+From the plot of Logstreams against Logspeechiness_., we can see that the quadratic line and the linear line have almost the same fit with the data points. Therefore, we would not consider if variable I(Logspeechiness_.^2) suitable with the best model.
+
+## Interaction Plot 
+
+To see if there is an interaction between released_day and Login_spotify_playlists, we would filter to different Login_spotify_playlists group and plot Logstreams against released_day.
+
+```{r}
+songtrain3 %>% filter(Login_spotify_playlists >= 0 & Login_spotify_playlists <= 7) %>% ggplot(aes(released_day, Logstreams)) + geom_point(color = "skyblue")+geom_smooth(method = "lm", color = "red") + labs(title = "Interaction Plot of released_day and Login_spotify_playlists")
+songtrain3 %>% filter(Login_spotify_playlists > 7 & Login_spotify_playlists <= 9) %>% ggplot(aes(released_day, Logstreams)) + geom_point(color = "royalblue")+geom_smooth(method = "lm", color = "red")+ labs(title = "Interaction Plot of released_day and Login_spotify_playlists")
+songtrain3 %>% filter(Login_spotify_playlists > 9) %>% ggplot(aes(released_day, Logstreams)) + geom_point(color = "navy")+geom_smooth(method = "lm", color = "red") + labs(title = "Interaction Plot of released_day and Login_spotify_playlists")
+```
+
+From these plots, we can see that there are not any trend in these graph. Therefore, we can conclude that the slope of released_day is not correlate to the rate of change of Login_spotify_playlists. Therefore, the variable for the best model can not have the interaction variable.
+
+Let's try again on one more interaction term.
+
+```{r}
+songtrain3 %>% filter(Login_spotify_playlists >= 0 & Login_spotify_playlists <= 7) %>% ggplot(aes(energy_., Logstreams)) + geom_point(color = "skyblue")+geom_smooth(method = "lm", color = "red") +  labs(title = "Interaction Plot of energy_. and Login_spotify_playlists")
+songtrain3 %>% filter(Login_spotify_playlists > 7 & Login_spotify_playlists <= 9) %>% ggplot(aes(energy_., Logstreams)) + geom_point(color = "royalblue")+geom_smooth(method = "lm", color = "red") + labs(title = "Interaction Plot of energy_. and Login_spotify_playlists")
+songtrain3 %>% filter(Login_spotify_playlists > 9) %>% ggplot(aes(energy_., Logstreams)) + geom_point(color = "navy")+geom_smooth(method = "lm", color = "red") + labs(title = "Interaction Plot of energy_. and Login_spotify_playlists")
+```
+
+From these plots, we still can see that there are not any trend in these graph. Therefore, we can conclude that the slope of released_day is not correlate to the rate of change of energy_.. Therefore, the variable for the best model can not have the interaction variable.
+
+## Correlation Test 
+
+```{r}
+cor(songtrain3)
+```
+
+From the result, we can see that not any of our variables in our dataset correlate too much to filter out of the dataset. So we do not remove any variable.
+
+## Best Subsets
+```{r}
+best.subset <- regsubsets(Logstreams ~ . + I(Login_apple_charts^2) + I(Login_apple_playlists ^2) + I(in_spotify_charts^2) + I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2), songtrain3,nvmax = 22)
+sum <- summary(best.subset)
+sum$outmat
+```
+
+When there are 22 variables, model will be like this 
+
+```{r}
+lm22 <- lm(Logstreams ~ artist_count + released_year + released_month + released_day + in_spotify_charts + bpm + danceability_. + valence_. + energy_. + Login_spotify_playlists + Login_apple_playlists + Login_apple_charts +  Logacousticness_. + Loginstrumentalness_. + Logliveness_. + Logspeechiness_. + I(Login_apple_charts^2) + I(Login_apple_playlists^2) + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2),songtrain3)
+summary(lm22)
+```
+
+From the model, we can see that the Adjusted R-squared is quite high. However since the p-value for the variables some of the variables are higher than 0.05 so changes in these variables do not significantly affect the predicted Logstreams Therefore, this is not the best model that we want to find. 
+
+
+When there are 21 variables, model will be like this 
+
+```{r}
+lm21 <- lm(Logstreams ~ artist_count + released_year + released_month + released_day + in_spotify_charts + bpm + danceability_. + valence_. + energy_. + Login_spotify_playlists + Login_apple_playlists + Login_apple_charts +  Logacousticness_. + Loginstrumentalness_.  + Logspeechiness_. + I(Login_apple_charts^2) + I(Login_apple_playlists^2) + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2),songtrain3)
+summary(lm21)
+```
+
+From the model, we can see that the Adjusted R-squared is quite high. However since the p-value for the variables some of the variables are higher than 0.05 so changes in these variables do not significantly affect the predicted Logstreams Therefore, this is not the best model that we want to find. 
+
+
+When there are 20 variables, model will be like this 
+
+```{r}
+lm20 <- lm(Logstreams ~ artist_count + released_year + released_month + released_day + in_spotify_charts + bpm + danceability_. + valence_. + energy_. + Login_spotify_playlists + Login_apple_playlists + Login_apple_charts +  Logacousticness_. + Loginstrumentalness_.  + Logspeechiness_. + I(Login_apple_playlists^2) + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2),songtrain3)
+summary(lm20)
+```
+
+From the model, we can see that the Adjusted R-squared is quite high. However since the p-value for the variables some of the variables are higher than 0.05 so changes in these variables do not significantly affect the predicted Logstreams Therefore, this is not the best model that we want to find. 
+
+
+When there are 19 variables, model will be like this 
+
+```{r}
+lm19 <- lm(Logstreams ~ artist_count + released_year + released_month + released_day + in_spotify_charts + bpm + danceability_. + valence_. + energy_. + Login_spotify_playlists + Login_apple_playlists + Login_apple_charts +  Logacousticness_.  + Logspeechiness_. + I(Login_apple_playlists^2) + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2),songtrain3)
+summary(lm19)
+```
+
+From the model, we can see that the Adjusted R-squared is quite high. However since the p-value for the variables some of the variables are higher than 0.05 so changes in these variables do not significantly affect the predicted Logstreams Therefore, this is not the best model that we want to find. 
+
+
+When there are 18 variables, model will be like this 
+
+```{r}
+lm18 <- lm(Logstreams ~ artist_count + released_year + released_month + released_day + in_spotify_charts + bpm + danceability_. + valence_. + Login_spotify_playlists + Login_apple_playlists + Login_apple_charts +  Logacousticness_.  + Logspeechiness_. + I(Login_apple_playlists^2) + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2),songtrain3)
+summary(lm18)
+```
+
+From the model, we can see that the Adjusted R-squared is quite high. However since the p-value for the variables some of the variables are higher than 0.05 so changes in these variables do not significantly affect the predicted Logstreams Therefore, this is not the best model that we want to find. 
+
+
+When there are 17 variables, model will be like this 
+
+```{r}
+lm17 <- lm(Logstreams ~ artist_count + released_year + released_month + released_day + in_spotify_charts + bpm + danceability_. + Login_spotify_playlists + Login_apple_playlists + Login_apple_charts +  Logacousticness_.  + Logspeechiness_. + I(Login_apple_playlists^2) + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2),songtrain3)
+summary(lm17)
+```
+
+From the model, we can see that the Adjusted R-squared is quite high. However since the p-value for the variables some of the variables are higher than 0.05 so changes in these variables do not significantly affect the predicted Logstreams Therefore, this is not the best model that we want to find. 
+
+
+When there are 16 variables, model will be like this 
+
+```{r}
+lm16 <- lm(Logstreams ~ released_year + released_month + released_day + in_spotify_charts + bpm + danceability_. + Login_spotify_playlists + Login_apple_playlists + Login_apple_charts +  Logacousticness_.  + Logspeechiness_. + I(Login_apple_playlists^2) + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2),songtrain3)
+summary(lm16)
+```
+
+From the model, we can see that the Adjusted R-squared is quite high. However since the p-value for the variables some of the variables are higher than 0.05 so changes in these variables do not significantly affect the predicted Logstreams Therefore, this is not the best model that we want to find. 
+
+
+When there are 15 variables, model will be like this 
+
+```{r}
+lm15 <- lm(Logstreams ~ artist_count + released_year + released_day + in_spotify_charts + bpm + danceability_. + Login_apple_playlists + Login_apple_charts +  Logacousticness_.  + Logspeechiness_. + I(Login_apple_playlists^2) + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2),songtrain3)
+summary(lm15)
+```
+
+From the model, we can see that the Adjusted R-squared is quite high. However since the p-value for the variables some of the variables are higher than 0.05 so changes in these variables do not significantly affect the predicted Logstreams Therefore, this is not the best model that we want to find. 
+
+
+When there are 14 variables, model will be like this 
+
+```{r}
+lm14 <- lm(Logstreams ~ released_year  + released_day + in_spotify_charts + bpm + danceability_. + Login_apple_playlists + Login_apple_charts +  Logacousticness_.  + Logspeechiness_. + I(Login_apple_playlists^2) + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2),songtrain3)
+summary(lm14)
+```
+
+From the model, we can see that the Adjusted R-squared is quite high. However since the p-value for the variables some of the variables are higher than 0.05 so changes in these variables do not significantly affect the predicted Logstreams Therefore, this is not the best model that we want to find. 
+
+
+When there are 13 variables, model will be like this 
+
+```{r}
+lm13 <- lm(Logstreams ~ released_year + released_day + in_spotify_charts + bpm + danceability_. + Login_apple_playlists + Login_apple_charts +  Logacousticness_.  + Logspeechiness_. + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2),songtrain3)
+summary(lm13)
+```
+
+From the model, we can see that the Adjusted R-squared is quite high. However since the p-value for the variables some of the variables are higher than 0.05 so changes in these variables do not significantly affect the predicted Logstreams Therefore, this is not the best model that we want to find. 
+
+
+When there are 12 variables, model will be like this 
+
+```{r}
+lm12 <- lm(Logstreams ~ released_year + in_spotify_charts + bpm + danceability_. + Login_apple_playlists + Login_apple_charts +  Logacousticness_.  + Logspeechiness_. + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2),songtrain3)
+summary(lm12)
+```
+
+From the model, we can see that the Adjusted R-squared is quite high. However since the p-value for the variables some of the variables are higher than 0.05 so changes in these variables do not significantly affect the predicted Logstreams Therefore, this is not the best model that we want to find. 
+
+
+When there are 11 variables, model will be like this 
+
+```{r}
+lm11 <- lm(Logstreams ~ released_year + in_spotify_charts + bpm + Login_apple_playlists + Login_apple_charts +  Logacousticness_.  + Logspeechiness_. + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2), songtrain3)
+summary(lm11)
+```
+
+From this model, it seem like all the conditions for this model are fulfill with p-value for all the variables are much smaller than 0.05. In addition, the Adjusted R-squared for this model is higher than the based model. Therefore, this is the best model that we get from Best Subsets. 
+
+## Validate the Mathematical Assumptions
+
+Assumptions for Linear Models:
+
+1. ε|xi is independent of ε|xj for any xi ̸= xj (independence)
+
+2. ε|x has standard deviation σ that does not depend on x. (homoscedasticity)
+
+3. ε|x is normally distributed for each x (normality)
+
+
+### Independence Assumptions
+
+```{r}
+cor(songtrain3)
+```
+
+Based on the correlation test, we can see that none of the variables that we use in the model are highly correlated. Therefore, the model is consistent with the independence assumption.
+
+### Homoscedasticity and Normality Assumption
+```{r}
+songtrain4 <- songtrain3 %>% 
+  mutate(res = residuals(lm11), fit = fitted.values(lm11))
+shapiro.test(songtrain4$res)
+ncvTest(lm11)     
+```
+
+From the test, we can see that the p-value which is 0.005632 for Shapiro test and 0.0008519 for ncvTest which are smaller than 0.05 which mean our data is not consistent with homoscedasticity and normality. However, when the sample size is large, any tests such as these will be too powerful and often reject the null hypothesis. Thus, they commit many Type I errors. So we would want to plot the histogram and scatterplot of residual to have a better conclusion for the assumptions.
+
+
+```{r}
+ggplot(songtrain4, aes(res)) + geom_histogram(fill = "royalblue1", color = "black",) + labs( title = "Histogram of residuals")
+
+
+ggplot(songtrain4, aes(fit, res)) + geom_point(color = "royalblue1") + labs(title = "Scatterplot of residuals")
+```
+
+We can see that the in the first plot, we can see that the residual histogram is approximately normal. Which mean that this model is conistent with normality assumption.
+
+In the second plot, the residual scatterplot does not show any trend in the scatter plot which mean the model is also consistent with the homoscedasticity assumption. Addition, the dataset also is consistent with the independence assumption by correlation test.
+
+Therefore we conclude that this model is valid for predicting Logstreams as a function of released_year, in_spotify_charts, bpm, Login_apple_playlists, Login_apple_charts,  Logacousticness_., Logspeechiness_., I(in_spotify_charts^2),  I(Login_spotify_playlists^2), I(released_day^2), I(released_year^2).
+
+## Coefficient Explaining
+
+```{r}
+summary(lm11)
+```
+
+From this model, we can see that
+
+Intercept:
+
+- Estimate: The estimated intercept is -2.874e+03, indicating that when all other predictor variables are zero, the predicted value of Logstreams is approximately -2874.
+- Std. Error: The standard error of the intercept estimate is 6.942e+02.
+- t value: The t-value associated with the intercept is -4.139, with a p-value of 4.18e-05, indicating statistical significance. Therefore, the intercept is significantly different from zero, suggesting that there's a base level of Logstreams even when all predictors are zero.
+
+released_year:
+
+- Estimate: The estimated coefficient for released_year is 2.886, suggesting that for each one-unit increase in the released year, the Logstreams increase by approximately 2.886.
+- Std. Error: The standard error of the coefficient estimate for released_year is 6.953e-01.
+- t value: The t-value associated with released_year is 4.151, with a p-value of 3.98e-05, indicating statistical significance. Thus, the year of release significantly affects the number of Logstreams, with newer releases generally having higher Logstreams.
+
+in_spotify_charts:
+
+- Estimate: The estimated coefficient for in_spotify_charts is 0.04418, implying that for each one-unit increase in being in Spotify charts, the Logstreams increase by approximately 0.04418.
+- Std. Error: The standard error of the coefficient estimate for in_spotify_charts is 1.068e-02.
+- t value: The t-value associated with in_spotify_charts is 4.137, with a p-value of 4.22e-05, indicating statistical significance. This suggests that being in the Spotify charts positively influences the number of Logstreams.
+
+bpm:
+
+- Estimate: The estimated coefficient for bpm is 0.001967, suggesting that for each one-unit increase in beats per minute, the Logstreams increase by approximately 0.001967.
+- Std. Error: The standard error of the coefficient estimate for bpm is 8.345e-04.
+- t value: The t-value associated with bpm is 2.357, with a p-value of 0.018878, indicating statistical significance. Thus, songs with higher beats per minute tend to have higher Logstreams.
+
+Login_apple_playlists:
+
+- Estimate: The estimated coefficient for Login_apple_playlists is 1.484e-01, indicating that for each one-unit increase in login to Apple playlists, the Logstreams increase by approximately 0.1484.
+- Std. Error: The standard error of the coefficient estimate for Login_apple_playlists is 2.825e-02.
+- t value: The t-value associated with Login_apple_playlists is 5.255, with a p-value of 2.32e-07, suggesting statistical significance.
+
+Login_apple_charts:
+
+- Estimate: The estimated coefficient for Login_apple_charts is 9.646e-02, implying that for each one-unit increase in login to Apple charts, the Logstreams increase by approximately 0.09646.
+- Std. Error: The standard error of the coefficient estimate for Login_apple_charts is 1.701e-02.
+- t value: The t-value associated with Login_apple_charts is 5.672, with a p-value of 2.57e-08, indicating statistical significance.
+
+Logacousticness_:
+
+- Estimate: The estimated coefficient for Logacousticness_ is 4.993e-02, suggesting that for each one-unit increase in the log-transformed acousticness, the Logstreams increase by approximately 0.04993.
+- Std. Error: The standard error of the coefficient estimate for Logacousticness_ is 1.861e-02.
+- t value: The t-value associated with Logacousticness_ is 2.683, with a p-value of 0.007571, indicating statistical significance.
+
+Logspeechiness_:
+
+- Estimate: The estimated coefficient for Logspeechiness_ is -5.751e-02, indicating that for each one-unit increase in the log-transformed speechiness, the Logstreams decrease by approximately 0.05751.
+- Std. Error: The standard error of the coefficient estimate for Logspeechiness_ is 2.877e-02.
+- t value: The t-value associated with Logspeechiness_ is -1.999, with a p-value of 0.046230, suggesting statistical significance.
+
+I(in_spotify_charts^2):
+
+- Estimate: The estimated coefficient for I(in_spotify_charts^2) is -1.059e-03, suggesting that the squared term of being in Spotify charts has a negative effect on Logstreams.
+- Std. Error: The standard error of the coefficient estimate for I(in_spotify_charts^2) is 3.926e-04.
+- t value: The t-value associated with I(in_spotify_charts^2) is -2.698, with a p-value of 0.007246, indicating statistical significance.
+
+I(Login_spotify_playlists^2):
+
+- Estimate: The estimated coefficient for I(Login_spotify_playlists^2) is 2.532e-02, implying that the squared term of login to Spotify playlists has a positive effect on Logstreams.
+- Std. Error: The standard error of the coefficient estimate for I(Login_spotify_playlists^2) is 2.298e-03.
+- t value: The t-value associated with I(Login_spotify_playlists^2) is 11.016, with a p-value of < 2e-16, indicating statistical significance.
+
+I(released_day^2):
+
+- Estimate: The estimated coefficient for I(released_day^2) is 3.363e-04, suggesting that the squared term of released_day has a positive effect on Logstreams.
+- Std. Error: The standard error of the coefficient estimate for I(released_day^2) is 8.590e-05.
+- t value: The t-value associated with I(released_day^2) is 3.915, with a p-value of 0.000105, indicating statistical significance.
+
+I(released_year^2):
+
+- Estimate: The estimated coefficient for I(released_year^2) is -7.206e-04, indicating that the squared term of released_year has a negative effect on Logstreams.
+- Std. Error: The standard error of the coefficient estimate for I(released_year^2) is 1.741e-04.
+- t value: The t-value associated with I(released_year^2) is -4.140, with a p-value of 4.18e-05, indicating statistical significance.
+
+
+Overall, we have the Adjusted R-squared is 0.7184 which mean that 71.84% of the variation of variable Logstreams explained by these variable. The p-value of < 2.2e-16 indicates that the model is statistically significant in predicting the 0.7184
+
+
+## Robust Standard Errors
+
+```{r}
+coeftest(lm11,vcov = vcovHC(lm11,type = "HC1"))
+```
+
+We are doing robust standard errors to look if we can solve the issue with heteroscedasticity in our model. And based on the result, we see that although increase the Standard Error of all variables, the p-value of almost all the variable are still smaller than 0.05 so almost all the variable are statistical significant. It seem like from the graph above the model is already consistent with homoscedasticity. Therefore, it do not really matter to do robust standard error on this model. 
+
+## Prediction
+
+```{r}
+newdata = data.frame(released_year = 2023, in_spotify_charts = 0, bpm = 115, Login_apple_playlists = 4, Login_apple_charts = 4,  Logacousticness_. = 3.7, Logspeechiness_. = 3.2 ,  Login_spotify_playlists = 7 , released_day = 21)
+predict(lm11,newdata,interval = "predict", level = 0.99)
+```
+
+Using the value of released_year = 2023, in_spotify_charts = 0, bpm = 115, Login_apple_playlists = 4, Login_apple_charts = 4,  Logacousticness_. = 3.7, Logspeechiness_. = 3.2 ,  Login_spotify_playlists = 7 , released_day = 21 we see that this model predict the Logstreams is 19.30162 with the lowerbound is 18.03766 and the upperbound is 20.56559 in the 99% confidence interval. 
+
+## Check the model on the test set 
+
+To check the model, we try the same model but on a different dataset which is cartest2. But first, we would need to mutate a columns of LogPrice for the test set and get rid of the old column Price
+
+```{r}
+songtest2 <- songtest %>% 
+  mutate(Login_apple_playlists = log(in_apple_playlists + 1)) %>% 
+  select(-in_apple_playlists) %>% 
+  mutate(Login_apple_charts = log(in_apple_charts + 1)) %>% 
+  select(-in_apple_charts) %>% 
+  mutate(Logspeechiness_. = log(speechiness_.)) %>% 
+  select(-speechiness_.) %>%
+  mutate(Logacousticness_. = log(acousticness_. + 1)) %>% 
+  select(-acousticness_.) %>% 
+  mutate(Login_spotify_playlists = log(in_spotify_playlists)) %>% 
+  select(-in_spotify_playlists) %>% 
+  mutate(Logstreams = log(streams)) %>% 
+  select(-streams)
+  
+lm_test <- lm(Logstreams ~ released_year + in_spotify_charts + bpm + Login_apple_playlists + Login_apple_charts +  Logacousticness_.  + Logspeechiness_. + I(in_spotify_charts^2) +  I(Login_spotify_playlists^2) + I(released_day^2) + I(released_year^2), songtest2)
+summary(lm_test)
+```
+
+Based on the result, we can see that most of the variables become insignificant. This is because of: 
+- Multicollinearity: The dataset may suffer from multicollinearity, where predictor variables are highly correlated with each other (independence assumption)
+- Small Sample Size: After splitting, the training dataset only has ~450 data points, which could have affected the generalizability of findings
+- Overfitting: After evaluating the training model on the test set, it seems that overfitting is evident, as the “best” model fails to generalize to new data due to too much noise being captured and/or random fluctuations.
+
+## Confint 
+```{r}
+confint(lm11)
+```
+Certainly! Let's interpret each coefficient along with its corresponding 95% confidence interval:
+
+(Intercept):
+- Estimate: The estimated intercept is between -4.238091e+03 and -1.509205e+03 with 95% confidence.
+- Interpretation: We are 95% confident that when all predictor variables are zero, the outcome (Logstreams, in this case) is between approximately -4238 and -1509.
+
+released_year:
+- Estimate: The estimated coefficient for released_year is between 1.519896e+00 and 4.252981e+00 with 95% confidence.
+- Interpretation: We are 95% confident that for each one-unit increase in the released year, the Logstreams increase by an amount between approximately 1.52 and 4.25.
+
+in_spotify_charts:
+- Estimate: The estimated coefficient for in_spotify_charts is between 2.319561e-02 and 6.517406e-02 with 95% confidence.
+- Interpretation: We are 95% confident that for each one-unit increase in being in Spotify charts, the Logstreams increase by an amount between approximately 0.0232 and 0.0652.
+
+bpm:
+- Estimate: The estimated coefficient for bpm is between 3.265649e-04 and 3.606960e-03 with 95% confidence.
+- Interpretation: We are 95% confident that for each one-unit increase in beats per minute (bpm), the Logstreams increase by an amount between approximately 0.000326 and 0.00361.
+
+Login_apple_playlists:
+- Estimate: The estimated coefficient for Login_apple_playlists is between 9.291790e-02 and 2.039547e-01 with 95% confidence.
+- Interpretation: We are 95% confident that for each one-unit increase in login to Apple playlists, the Logstreams increase by an amount between approximately 0.0929 and 0.204.
+
+Login_apple_charts:
+- Estimate: The estimated coefficient for Login_apple_charts is between 6.303465e-02 and 1.298796e-01 with 95% confidence.
+- Interpretation: We are 95% confident that for each one-unit increase in login to Apple charts, the Logstreams increase by an amount between approximately 0.063 and 0.130.
+
+Logacousticness_:
+- Estimate: The estimated coefficient for Logacousticness_ is between 1.335562e-02 and 8.650406e-02 with 95% confidence.
+- Interpretation: We are 95% confident that for each one-unit increase in the log-transformed acousticness, the Logstreams increase by an amount between approximately 0.0134 and 0.0865.
+
+Logspeechiness_:
+- Estimate: The estimated coefficient for Logspeechiness_ is between -1.140517e-01 and -9.656708e-04 with 95% confidence.
+- Interpretation: We are 95% confident that for each one-unit increase in the log-transformed speechiness, the Logstreams decrease by an amount between approximately -0.114 and -0.001.
+
+I(in_spotify_charts^2):
+- Estimate: The estimated coefficient for I(in_spotify_charts^2) is between -1.830745e-03 and -2.876047e-04 with 95% confidence.
+- Interpretation: We are 95% confident that the squared term of being in Spotify charts has an effect on Logstreams within the range of approximately -0.00183 and -0.000288.
+
+I(Login_spotify_playlists^2):
+- Estimate: The estimated coefficient for I(Login_spotify_playlists^2) is between 2.080298e-02 and 2.983789e-02 with 95% confidence.
+- Interpretation: We are 95% confident that the squared term of login to Spotify playlists has an effect on Logstreams within the range of approximately 0.0208 and 0.0298.
+
+ I(released_day^2):
+- Estimate: The estimated coefficient for I(released_day^2) is between 1.674987e-04 and 5.051604e-04 with 95% confidence.
+- Interpretation: We are 95% confident that the squared term of released_day has an effect on Logstreams within the range of approximately 0.000167 and 0.000505.
+
+ I(released_year^2):
+- Estimate: The estimated coefficient for I(released_year^2) is between -1.062669e-03 and -3.784500e-04 with 95% confidence.
+- Interpretation: We are 95% confident that the squared term of released_year has an effect on Logstreams within the range of approximately -0.00106 and -0.000378.
+
+## Limitation and Future Question
+Limitations:
+
+- Multicollinearity: The dataset may suffer from multicollinearity, where predictor variables are highly correlated with each other (independence assumption)
+- Small Sample Size: After splitting, the training dataset only has ~450 data points, which could have affected the generalizability of findings
+- Overfitting: After evaluating the training model on the test set, it seems that overfitting is evident, as the “best” model fails to generalize to new data due to too much noise being captured and/or random fluctuations.
+
+We want to explore the question:
+
+- How does collaboration between artists influence the popularity of songs on streaming platforms like Spotify? Because this could help the prediction of the popularity of a song more accurate. 
