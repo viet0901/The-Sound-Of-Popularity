@@ -1,52 +1,73 @@
-# 🎵 Spotify Music Analysis  
+# 🎵 Spotify Music Analysis
 
-## 📜 Description  
-This project explores the relationship between various musical features and the popularity of songs on Spotify. Using data-driven insights, it identifies key factors that influence a song's success and builds predictive models to uncover patterns in Spotify's 2023 dataset.
-
----
-
-## 🗂 Table of Contents  
-1. [Project Objective](#-project-objective)  
-2. [Dataset Overview](#-dataset-overview)  
-3. [Methodology](#-methodology)  
-4. [Results and Insights](#-results-and-insights)  
+**Author:** Viet Nguyen
+**Date:** Spring 2024
 
 ---
 
-## 🎯 Project Objective  
-The primary goal is to analyze Spotify's 2023 music data to determine which musical attributes (e.g., danceability, energy, tempo) correlate most strongly with a song's popularity and to predict potential hit songs using statistical models.
+## 📜 Description
+
+This project explores the relationship between musical features and the popularity of songs on Spotify. Using statistical modeling and data visualization, we identify the most influential traits of a song’s success and build predictive models using Spotify’s 2023 dataset.
 
 ---
 
-## 📊 Dataset Overview  
-**Source:** Spotify 2023 Dataset (`spotify-2023.csv`)  
-**Features Analyzed:**  
-- **Danceability**: Suitability of a track for dancing  
-- **Energy**: Song intensity and activity  
-- **Loudness**: Volume level  
-- **Speechiness**: Spoken word presence  
-- **Tempo**: Speed in beats per minute  
-- **Streams**: Song play count (popularity metric)
+## 🗂 Project Structure
+
+```
+.
+├── data/                             # Raw and cleaned datasets
+│   ├── songtest.csv
+│   ├── songtrain.csv
+│   └── spotify-2023.csv
+├── markdown/                         # RMarkdown notebook for analysis
+│   └── Viet_Nguyen_Final_Project.Rmd
+├── presentation/                     # Final presentation slide deck
+│   └── 220 Final Presentation - Viet & Nicolas.pptx
+├── report/                           # Rendered HTML report
+│   └── Viet_Nguyen_Final_Project.html
+└── README.md                         # Project documentation
+```
 
 ---
 
-## 🛠 Methodology  
-### Tools and Libraries:  
-- `R` and R libraries: `dplyr`, `ggplot2`, `car`, `lmtest`, `leaps`.  
-- Statistical modeling for regression and feature selection.  
+## 🎯 Project Objective
 
-### Steps:  
-1. **Data Cleaning**: Addressed missing values, removed outliers, and standardized formats.  
-2. **Exploratory Data Analysis (EDA)**: Visualized trends and correlations.  
-3. **Regression Modeling**: Built models to predict stream counts based on musical features.  
-4. **Best Subset Selection**: Identified the most impactful predictors.  
+To analyze Spotify's 2023 music data and determine which musical attributes—such as danceability, energy, and tempo—correlate most with a song's popularity, and to predict future hit potential using regression-based models.
 
 ---
 
-## 📈 Results and Insights  
-- **Danceability** and **Energy** are strong predictors of a song's success.  
-- Tracks with higher speechiness tend to have fewer streams.  
-- The optimized regression model explains a significant portion of variability in song popularity.  
+## 📊 Dataset Overview
 
-Visualizations and additional analysis results are included in the project files.
+**Source:** Spotify 2023 Dataset (`spotify-2023.csv`)
+**Key Features Analyzed:**
 
+* **Danceability:** How suitable a track is for dancing
+* **Energy:** Intensity and activity of a track
+* **Loudness:** Average volume level
+* **Speechiness:** Presence of spoken words
+* **Tempo:** Beats per minute
+* **Streams:** Number of plays (target variable)
+
+---
+
+## 🛠 Methodology
+
+**Tools & Libraries:**
+
+* `R`, `dplyr`, `ggplot2`, `car`, `lmtest`, `leaps`
+
+**Process:**
+
+* **Data Cleaning:** Handled missing values, outliers, and formatting issues
+* **Exploratory Data Analysis:** Correlation plots and visual trends
+* **Regression Modeling:** Built multiple linear regression models
+* **Best Subset Selection:** Used AIC and adjusted R² to select top predictors
+
+---
+
+## 📈 Results and Insights
+
+* **Danceability** and **Energy** are the strongest predictors of stream counts
+* **Speechiness** is negatively associated with popularity
+* The final regression model explains a meaningful portion of variance in song streams
+* Visual outputs and plots are available in the notebook and presentation files
